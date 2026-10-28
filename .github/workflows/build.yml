@@ -1,0 +1,46 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.1'
+          channel: 'stable'
+          cache: true
+
+      - name: 用官方模板生成 Android 原生工程
+        run: |
+          flutter create --org com.pan.ledger --project-name ledger /tmp/ledgerapp
+
+      - name: 用我们的源码覆盖
+        run: |
+          rm -rf /tmp/ledgerapp/lib
+          cp -r lib /tmp/ledgerapp/lib
+          cp pubspec.yaml /tmp/ledgerapp/pubspec.yaml
+
+      - name: 设置中文 App 名称
+        run: |
+          sed -i 's/android:label="ledger"/android:label="记账软件"/' /tmp/ledgerapp/android/app/src/main/AndroidManifest.xml
+
+      - name: 拉取依赖并构建 APK
+        working-directory: /tmp/ledgerapp
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: 上传 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledger-app-release-apk
+          path: /tmp/ledgerapp/build/app/outputs/flutter-apk/app-release.apk
