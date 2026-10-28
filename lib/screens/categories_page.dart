@@ -55,48 +55,76 @@ class _CategoriesPageState extends State<CategoriesPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _CategoryList(list: p.expenseCategories),
-          _CategoryList(list: p.incomeCategories),
+          _CategoryTree(p: p, type: 'expense'),
+          _CategoryTree(p: p, type: 'income'),
         ],
       ),
     );
   }
 }
 
-class _CategoryList extends StatelessWidget {
-  final List<Category> list;
-  const _CategoryList({required this.list});
+class _CategoryTree extends StatelessWidget {
+  final AppProvider p;
+  final String type;
+  const _CategoryTree({required this.p, required this.type});
 
   @override
   Widget build(BuildContext context) {
-    final p = Provider.of<AppProvider>(context, listen: false);
-    if (list.isEmpty) {
+    final tops = p.topCategories(type);
+    if (tops.isEmpty) {
       return const Center(child: Text('暂无分类，点击 + 添加'));
     }
     return ListView.separated(
-      itemCount: list.length,
+      itemCount: tops.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (_, i) {
-        final c = list[i];
-        return ListTile(
-          leading: CircleAvatar(
-              backgroundColor: Color(c.color).withOpacity(0.2),
-              child: Text(c.icon)),
-          title: Text(c.name),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => CategoryEditPage(category: c)),
-          ),
-          onLongPress: () async {
-            final ok = await p.deleteCategory(c.id!);
-            if (!ok && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('该分类已有交易记录，无法删除')));
-            }
-          },
+        final top = tops[i];
+        final children = p.subCategories(top.id!);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                  backgroundColor: Color(top.color).withOpacity(0.2),
+                  child: Text(top.icon)),
+              title: Text(top.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => CategoryEditPage(category: top)),
+              ),
+              onLongPress: () => _delete(context, top),
+            ),
+            ...children.map((c) => ListTile(
+                  contentPadding:
+                      const EdgeInsets.only(left: 56, right: 16, top: 0, bottom: 0),
+                  leading: CircleAvatar(
+                      backgroundColor: Color(c.color).withOpacity(0.2),
+                      child: Text(c.icon)),
+                  title: Text(c.name),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => CategoryEditPage(category: c)),
+                  ),
+                  onLongPress: () => _delete(context, c),
+                )),
+          ],
         );
       },
     );
+  }
+
+  void _delete(BuildContext context, Category c) async {
+    final ok = await p.deleteCategory(c.id!);
+    if (!ok && context.mounted) {
+      final hasChild = c.parentId == null && p.subCategories(c.id!).isNotEmpty;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(hasChild
+              ? '请先删除该分类下的二级分类'
+              : '该分类已有交易记录，无法删除')));
+    }
   }
 }

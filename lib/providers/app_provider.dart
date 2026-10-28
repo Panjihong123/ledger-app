@@ -16,10 +16,17 @@ class AppProvider extends ChangeNotifier {
   bool _ready = false;
 
   bool get isReady => _ready;
+  /// 二级分类（记账时实际可选的）
   List<Category> get expenseCategories =>
-      categories.where((c) => c.type == 'expense').toList();
+      categories.where((c) => c.type == 'expense' && c.parentId != null).toList();
   List<Category> get incomeCategories =>
-      categories.where((c) => c.type == 'income').toList();
+      categories.where((c) => c.type == 'income' && c.parentId != null).toList();
+  /// 一级分类（树的根节点）
+  List<Category> topCategories(String type) =>
+      categories.where((c) => c.type == type && c.parentId == null).toList();
+  /// 某一级分类下的二级分类
+  List<Category> subCategories(int parentId) =>
+      categories.where((c) => c.parentId == parentId).toList();
 
   Future<void> init() async {
     ledgers = await _db.getLedgers();
@@ -117,6 +124,12 @@ class AppProvider extends ChangeNotifier {
 
   Future<bool> deleteCategory(int id) async {
     if (await _db.countTxnByCategory(id) > 0) return false; // 有交易不可删
+    final cat =
+        categories.firstWhere((c) => c.id == id, orElse: () => categories.first);
+    if (cat.parentId == null &&
+        categories.any((c) => c.parentId == id)) {
+      return false; // 一级分类下有二级分类，先删子分类
+    }
     await _db.deleteCategory(id);
     categories.removeWhere((x) => x.id == id);
     notifyListeners();
@@ -161,18 +174,27 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// 按分类聚合（type: expense/income；from/to 为毫秒区间）
+  /// [byTop] 为 true 时归并到一级分类
   Future<List<CategoryStat>> statsByCategory(
-      String type, int from, int to) async {
+      String type, int from, int to,
+      {bool byTop = false}) async {
     final txs =
         await _db.getTransactionsRange(currentLedgerId, from, to, type);
     final map = <int, double>{};
     for (final t in txs) {
-      map[t.categoryId] = (map[t.categoryId] ?? 0) + t.amount;
+      int key = t.categoryId;
+      if (byTop) {
+        final cat = categories.firstWhere((c) => c.id == t.categoryId,
+            orElse: () => Category(id: t.categoryId, name: '未分类', type: type));
+        if (cat.parentId != null) key = cat.parentId!;
+      }
+      map[key] = (map[key] ?? 0) + t.amount;
     }
     final list = <CategoryStat>[];
     map.forEach((cid, sum) {
       final cat = categories.firstWhere((c) => c.id == cid,
-          orElse: () => Category(id: cid, name: '未分类', type: type));
+          orElse: () => Category(
+              id: cid, name: '未分类', type: type, color: 0xFF9E9E9E, icon: '📦'));
       list.add(CategoryStat(cat, sum));
     });
     list.sort((a, b) => b.sum.compareTo(a.sum));

@@ -25,6 +25,7 @@ class CategoryEditPage extends StatelessWidget {
     String t = category?.type ?? type;
     String icon = category?.icon ?? '📦';
     int color = category?.color ?? 0xFF42A5F5;
+    int? parentId = category?.parentId;
 
     return Scaffold(
       appBar: AppBar(title: Text(isEdit ? '编辑分类' : '添加分类')),
@@ -38,7 +39,24 @@ class CategoryEditPage extends StatelessWidget {
                 ButtonSegment(value: 'income', label: Text('收入')),
               ],
               selected: {t},
-              onSelectionChanged: (s) => setState(() => t = s.first),
+              onSelectionChanged: (s) => setState(() {
+                t = s.first;
+                parentId = null; // 切换类型后清空上级，避免跨类型
+              }),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int?>(
+              value: parentId,
+              decoration: const InputDecoration(labelText: '上级分类（不选则为一级分类）'),
+              items: [
+                const DropdownMenuItem<int?>(
+                    value: null, child: Text('无（作为一级分类）')),
+                ...p.topCategories(t).where((c) => c.id != category?.id).map(
+                      (c) => DropdownMenuItem<int?>(
+                          value: c.id, child: Text(c.name)),
+                    ),
+              ],
+              onChanged: (v) => setState(() => parentId = v),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -110,6 +128,7 @@ class CategoryEditPage extends StatelessWidget {
                   type: t,
                   color: color,
                   icon: icon,
+                  parentId: parentId,
                 );
                 if (isEdit) {
                   p.updateCategory(c);

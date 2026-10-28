@@ -14,6 +14,7 @@ class StatisticsPage extends StatefulWidget {
 class _StatisticsPageState extends State<StatisticsPage> {
   String _range = 'month'; // month / year
   String _type = 'expense'; // expense / income
+  bool _byTop = true; // true=按一级分类；false=按二级分类
   int _year = DateTime.now().year;
   int _month = DateTime.now().month;
 
@@ -40,7 +41,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('统计')),
       body: FutureBuilder<List<CategoryStat>>(
-        future: p.statsByCategory(_type, from, to),
+        future: p.statsByCategory(_type, from, to, byTop: _byTop),
         builder: (ctx, snap) {
           final stats = snap.data ?? [];
           final total = stats.fold(0.0, (s, e) => s + e.sum);
@@ -66,6 +67,16 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 ],
                 selected: {_type},
                 onSelectionChanged: (s) => setState(() => _type = s.first),
+              ),
+              const SizedBox(height: 12),
+              // 一级/二级维度切换
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text('按一级')),
+                  ButtonSegment(value: false, label: Text('按二级')),
+                ],
+                selected: {_byTop},
+                onSelectionChanged: (s) => setState(() => _byTop = s.first),
               ),
               const SizedBox(height: 12),
               // 年/月选择
