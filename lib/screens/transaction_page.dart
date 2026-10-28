@@ -24,9 +24,8 @@ class _TransactionPageState extends State<TransactionPage> {
     super.initState();
     final p = context.read<AppProvider>();
     _accountId = p.accounts.isNotEmpty ? p.accounts.first.id : null;
-    _categoryId = p.expenseCategories.isNotEmpty
-        ? p.expenseCategories.first.id
-        : null;
+    final list = p.orderedCategories('expense');
+    _categoryId = list.isNotEmpty ? list.first.id : null;
   }
 
   @override
@@ -36,7 +35,7 @@ class _TransactionPageState extends State<TransactionPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final cats = _type == 'expense' ? p.expenseCategories : p.incomeCategories;
+    final cats = p.orderedCategories(_type);
 
     return Scaffold(
       appBar: AppBar(title: const Text('记一笔')),
@@ -53,16 +52,8 @@ class _TransactionPageState extends State<TransactionPage> {
             onSelectionChanged: (s) {
               setState(() {
                 _type = s.first;
-                _categoryId = (_type == 'expense'
-                        ? p.expenseCategories
-                        : p.incomeCategories)
-                    .isNotEmpty
-                    ? (_type == 'expense'
-                            ? p.expenseCategories
-                            : p.incomeCategories)
-                        .first
-                        .id
-                    : null;
+                final list = p.orderedCategories(_type);
+                _categoryId = list.isNotEmpty ? list.first.id : null;
               });
             },
           ),
@@ -85,13 +76,17 @@ class _TransactionPageState extends State<TransactionPage> {
             onChanged: (v) => setState(() => _accountId = v),
           ),
           const SizedBox(height: 16),
-          // 分类
+          // 分类（一级 + 其下二级，层级缩进显示）
           DropdownButtonFormField<int>(
             value: _categoryId,
             decoration: const InputDecoration(labelText: '分类'),
             items: cats
                 .map((c) => DropdownMenuItem(
-                    value: c.id, child: Text('${c.icon} ${c.name}')))
+                      value: c.id,
+                      child: Text(c.parentId == null
+                          ? '${c.icon} ${c.name}'
+                          : '    ↳ ${c.icon} ${c.name}'),
+                    ))
                 .toList(),
             onChanged: (v) => setState(() => _categoryId = v),
           ),

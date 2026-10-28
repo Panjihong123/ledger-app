@@ -27,6 +27,21 @@ class AppProvider extends ChangeNotifier {
   /// 某一级分类下的二级分类
   List<Category> subCategories(int parentId) =>
       categories.where((c) => c.parentId == parentId).toList();
+  /// 记账选择分类时用的有序列表：先一级（按添加顺序），紧跟其下二级，
+  /// 这样新加的二级分类会排在其父级下方，而不是掉到列表最末。
+  List<Category> orderedCategories(String type) {
+    final tops = topCategories(type);
+    final result = <Category>[];
+    for (final top in tops) {
+      result.add(top);
+      result.addAll(subCategories(top.id!));
+    }
+    // 兜底：父级缺失的二级分类（理论不存在）追加在末尾
+    result.addAll(categories
+        .where((c) => c.type == type && c.parentId != null)
+        .where((c) => !tops.any((t) => t.id == c.parentId)));
+    return result;
+  }
 
   Future<void> init() async {
     ledgers = await _db.getLedgers();

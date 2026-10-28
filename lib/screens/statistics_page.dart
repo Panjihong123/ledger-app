@@ -4,6 +4,26 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../utils/format.dart';
 
+/// 统计饼图配色（按索引取，保证每片颜色不同）
+const _palette = [
+  Color(0xFFEF5350),
+  Color(0xFFAB47BC),
+  Color(0xFF5C6BC0),
+  Color(0xFF29B6F6),
+  Color(0xFF26C6DA),
+  Color(0xFF26A69A),
+  Color(0xFF66BB6A),
+  Color(0xFF9CCC65),
+  Color(0xFFD4E157),
+  Color(0xFFFFCA28),
+  Color(0xFFFFA726),
+  Color(0xFFEC407A),
+  Color(0xFF8D6E63),
+  Color(0xFF78909C),
+  Color(0xFF7E57C2),
+  Color(0xFF42A5F5),
+];
+
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({super.key});
 
@@ -112,22 +132,23 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     child: Center(child: Text('该区间暂无记录')))
               else ...[
                 SizedBox(
-                  height: 220,
+                  height: 170,
                   child: PieChart(
                     PieChartData(
-                      sections: stats
-                          .map((s) => PieChartSectionData(
-                                value: s.sum,
-                                title:
-                                    '${(s.sum / total * 100).toStringAsFixed(0)}%',
-                                color: Color(s.category.color),
-                                radius: 90,
-                                titleStyle: const TextStyle(
-                                    color: Colors.white, fontSize: 12),
-                              ))
-                          .toList(),
+                      sections: stats.asMap().entries.map((e) {
+                        final s = e.value;
+                        final idx = e.key;
+                        return PieChartSectionData(
+                          value: s.sum,
+                          title: '${(s.sum / total * 100).toStringAsFixed(0)}%',
+                          color: _palette[idx % _palette.length],
+                          radius: 64,
+                          titleStyle: const TextStyle(
+                              color: Colors.white, fontSize: 11),
+                        );
+                      }).toList(),
                       sectionsSpace: 2,
-                      centerSpaceRadius: 50,
+                      centerSpaceRadius: 32,
                     ),
                   ),
                 ),
@@ -139,9 +160,16 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   final s = e.value;
                   final pct = total > 0 ? s.sum / total : 0.0;
                   return ListTile(
-                    leading: CircleAvatar(child: Text(s.category.icon)),
+                    leading: CircleAvatar(
+                      backgroundColor: _palette[idx % _palette.length],
+                      child: Text(s.category.icon,
+                          style: const TextStyle(color: Colors.white)),
+                    ),
                     title: Text(s.category.name),
-                    subtitle: LinearProgressIndicator(value: pct),
+                    subtitle: LinearProgressIndicator(
+                      value: pct,
+                      color: _palette[idx % _palette.length],
+                    ),
                     trailing: Text(money(s.sum)),
                   );
                 }),
