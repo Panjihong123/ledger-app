@@ -19,6 +19,15 @@ jobs:
           channel: 'stable'
           cache: true
 
+      # 关键：用仓库里固定的证书替换 CI 临时生成的 debug 证书。
+      # 这样每一次构建的签名都一致，新版本才能直接覆盖安装旧版本（不会丢数据）。
+      - name: 安装固定签名证书
+        run: |
+          mkdir -p "$HOME/.android"
+          cp signing/ledger.jks "$HOME/.android/debug.keystore"
+          echo "=== 本次构建使用的签名指纹（每次都相同才算正常） ==="
+          keytool -list -keystore "$HOME/.android/debug.keystore" -storepass android 2>/dev/null | grep -i "SHA-256\|SHA256" || true
+
       - name: 用官方模板生成 Android 原生工程
         run: |
           flutter create --org com.pan.ledger --project-name ledger /tmp/ledgerapp
@@ -33,16 +42,16 @@ jobs:
         run: |
           sed -i 's/android:label="ledger"/android:label="记账软件"/' /tmp/ledgerapp/android/app/src/main/AndroidManifest.xml
 
-      - name: 使用固定 debug 签名（保证升级时无需卸载、数据不丢）
-        run: |
-          mkdir -p "$HOME/.android"
-          cp keystore/debug.keystore "$HOME/.android/debug.keystore"
-
       - name: 拉取依赖并构建 APK
         working-directory: /tmp/ledgerapp
         run: |
           flutter pub get
-          flutter build apk --release
+          # 版本名从 pubspec.yaml 读（如 1.1.0）；版本号用 CI 运行序号，保证每次递增
+          VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | sed 's/+.*//')
+          echo "构建版本：$VERSION_NAME  版本号：${{ github.run_number }}"
+          flutter build apk --release \
+            --build-name="$VERSION_NAME" \
+            --build-number=${{ github.run_number }}
 
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4

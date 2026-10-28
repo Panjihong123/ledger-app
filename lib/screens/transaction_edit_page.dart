@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/transaction.dart';
 import '../providers/app_provider.dart';
 import '../utils/format.dart';
+import '../widgets/category_picker.dart';
 
 /// 编辑一条已有的交易记录
 class TransactionEditPage extends StatefulWidget {
@@ -47,7 +48,10 @@ class _TransactionEditPageState extends State<TransactionEditPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final cats = _type == 'expense' ? p.expenseCategories : p.incomeCategories;
+    // 编辑旧记录时分类可能已被删除，用安全查找兜底
+    if (_categoryId == null && p.isReady) {
+      _categoryId = p.defaultCategory(_type)?.id;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -72,16 +76,7 @@ class _TransactionEditPageState extends State<TransactionEditPage> {
             onSelectionChanged: (s) {
               setState(() {
                 _type = s.first;
-                _categoryId = (_type == 'expense'
-                        ? p.expenseCategories
-                        : p.incomeCategories)
-                    .isNotEmpty
-                    ? (_type == 'expense'
-                            ? p.expenseCategories
-                            : p.incomeCategories)
-                        .first
-                        .id
-                    : null;
+                _categoryId = p.defaultCategory(_type)?.id;
               });
             },
           ),
@@ -103,14 +98,34 @@ class _TransactionEditPageState extends State<TransactionEditPage> {
             onChanged: (v) => setState(() => _accountId = v),
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<int>(
-            value: _categoryId,
-            decoration: const InputDecoration(labelText: '分类'),
-            items: cats
-                .map((c) => DropdownMenuItem(
-                    value: c.id, child: Text('${c.icon} ${c.name}')))
-                .toList(),
-            onChanged: (v) => setState(() => _categoryId = v),
+          // 分类：两级面板，二级分类归在所属一级分类下
+          InkWell(
+            onTap: () async {
+              final picked = await showCategoryPicker(
+                context,
+                provider: p,
+                type: _type,
+                selectedId: _categoryId,
+              );
+              if (picked != null && mounted) {
+                setState(() => _categoryId = picked.id);
+              }
+            },
+            borderRadius: BorderRadius.circular(4),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: '分类',
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.arrow_drop_down),
+              ),
+              child: Text(
+                _categoryId == null ? '请选择分类' : p.categoryLabel(_categoryId!),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: _categoryId == null ? Colors.grey[600] : null,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           ListTile(

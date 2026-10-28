@@ -27,20 +27,32 @@ class AppProvider extends ChangeNotifier {
   /// 某一级分类下的二级分类
   List<Category> subCategories(int parentId) =>
       categories.where((c) => c.parentId == parentId).toList();
-  /// 记账选择分类时用的有序列表：先一级（按添加顺序），紧跟其下二级，
-  /// 这样新加的二级分类会排在其父级下方，而不是掉到列表最末。
-  List<Category> orderedCategories(String type) {
-    final tops = topCategories(type);
-    final result = <Category>[];
-    for (final top in tops) {
-      result.add(top);
-      result.addAll(subCategories(top.id!));
+
+  /// 按 id 查分类（找不到返回 null，兼容旧数据里已失效的分类 id）
+  Category? categoryById(int? id) {
+    if (id == null) return null;
+    for (final c in categories) {
+      if (c.id == id) return c;
     }
-    // 兜底：父级缺失的二级分类（理论不存在）追加在末尾
-    result.addAll(categories
-        .where((c) => c.type == type && c.parentId != null)
-        .where((c) => !tops.any((t) => t.id == c.parentId)));
-    return result;
+    return null;
+  }
+
+  /// 分类显示名：二级分类显示为「一级 / 二级」，便于确认归属
+  String categoryLabel(int? id, {String fallback = '未分类'}) {
+    final c = categoryById(id);
+    if (c == null) return fallback;
+    if (c.parentId == null) return '${c.icon} ${c.name}';
+    final parent = categoryById(c.parentId);
+    if (parent == null) return '${c.icon} ${c.name}';
+    return '${parent.name} / ${c.icon} ${c.name}';
+  }
+
+  /// 记账时的默认分类：取第一个一级分类；它若有二级分类则取第一个二级
+  Category? defaultCategory(String type) {
+    final tops = topCategories(type);
+    if (tops.isEmpty) return null;
+    final subs = subCategories(tops.first.id!);
+    return subs.isNotEmpty ? subs.first : tops.first;
   }
 
   Future<void> init() async {

@@ -3,26 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../utils/format.dart';
-
-/// 统计饼图配色（按索引取，保证每片颜色不同）
-const _palette = [
-  Color(0xFFEF5350),
-  Color(0xFFAB47BC),
-  Color(0xFF5C6BC0),
-  Color(0xFF29B6F6),
-  Color(0xFF26C6DA),
-  Color(0xFF26A69A),
-  Color(0xFF66BB6A),
-  Color(0xFF9CCC65),
-  Color(0xFFD4E157),
-  Color(0xFFFFCA28),
-  Color(0xFFFFA726),
-  Color(0xFFEC407A),
-  Color(0xFF8D6E63),
-  Color(0xFF78909C),
-  Color(0xFF7E57C2),
-  Color(0xFF42A5F5),
-];
+import '../utils/palette.dart';
 
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({super.key});
@@ -37,6 +18,25 @@ class _StatisticsPageState extends State<StatisticsPage> {
   bool _byTop = true; // true=按一级分类；false=按二级分类
   int _year = DateTime.now().year;
   int _month = DateTime.now().month;
+
+  /// 单个饼图切片：颜色按下标从调色板取，保证相邻/不同分类颜色不同；
+  /// 占比小于 5% 的切片不画百分比文字，避免小切片文字挤压重叠
+  PieChartSectionData _buildSection(
+      CategoryStat s, int index, double total) {
+    final pct = total > 0 ? s.sum / total : 0.0;
+    return PieChartSectionData(
+      value: s.sum,
+      color: chartColorAt(index),
+      radius: 58,
+      title: pct >= 0.05 ? '${(pct * 100).toStringAsFixed(0)}%' : '',
+      titlePositionPercentageOffset: 0.55,
+      titleStyle: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,24 +131,18 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     height: 200,
                     child: Center(child: Text('该区间暂无记录')))
               else ...[
+                // 饼图：控制尺寸，避免占满整屏
                 SizedBox(
-                  height: 170,
+                  height: 180,
                   child: PieChart(
                     PieChartData(
-                      sections: stats.asMap().entries.map((e) {
-                        final s = e.value;
-                        final idx = e.key;
-                        return PieChartSectionData(
-                          value: s.sum,
-                          title: '${(s.sum / total * 100).toStringAsFixed(0)}%',
-                          color: _palette[idx % _palette.length],
-                          radius: 64,
-                          titleStyle: const TextStyle(
-                              color: Colors.white, fontSize: 11),
-                        );
-                      }).toList(),
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 32,
+                      startDegreeOffset: -90,
+                      sectionsSpace: 1.5,
+                      centerSpaceRadius: 34,
+                      sections: [
+                        for (var i = 0; i < stats.length; i++)
+                          _buildSection(stats[i], i, total),
+                      ],
                     ),
                   ),
                 ),
@@ -159,18 +153,68 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   final idx = e.key;
                   final s = e.value;
                   final pct = total > 0 ? s.sum / total : 0.0;
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _palette[idx % _palette.length],
-                      child: Text(s.category.icon,
-                          style: const TextStyle(color: Colors.white)),
+                  final c = chartColorAt(idx);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        // 分类色块：与饼图颜色一一对应
+                        Container(
+                          width: 10,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: c,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(s.category.icon,
+                            style: const TextStyle(fontSize: 18)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      s.category.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${(pct * 100).toStringAsFixed(1)}%',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    money(s.sum),
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 5),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: pct,
+                                  minHeight: 4,
+                                  backgroundColor: Colors.grey[200],
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(c),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    title: Text(s.category.name),
-                    subtitle: LinearProgressIndicator(
-                      value: pct,
-                      color: _palette[idx % _palette.length],
-                    ),
-                    trailing: Text(money(s.sum)),
                   );
                 }),
               ],
