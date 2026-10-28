@@ -4,8 +4,28 @@ import '../models/category.dart';
 import '../providers/app_provider.dart';
 import 'category_edit_page.dart';
 
-class CategoriesPage extends StatelessWidget {
+class CategoriesPage extends StatefulWidget {
   const CategoriesPage({super.key});
+
+  @override
+  State<CategoriesPage> createState() => _CategoriesPageState();
+}
+
+class _CategoriesPageState extends State<CategoriesPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,33 +34,30 @@ class CategoriesPage extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('分类管理'),
-          bottom: const TabBar(
-            tabs: [Tab(text: '支出'), Tab(text: '收入')],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('分类管理'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [Tab(text: '支出'), Tab(text: '收入')],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CategoryEditPage(
+                type: _tabController.index == 1 ? 'income' : 'expense'),
           ),
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CategoryEditPage(
-                  type: DefaultTabController.of(context)?.index == 1
-                      ? 'income'
-                      : 'expense'),
-            ),
-          ),
-          child: const Icon(Icons.add),
-        ),
-        body: TabBarView(
-          children: [
-            _CategoryList(list: p.expenseCategories),
-            _CategoryList(list: p.incomeCategories),
-          ],
-        ),
+        child: const Icon(Icons.add),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _CategoryList(list: p.expenseCategories),
+          _CategoryList(list: p.incomeCategories),
+        ],
       ),
     );
   }

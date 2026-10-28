@@ -3,9 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/account.dart';
 import '../providers/app_provider.dart';
 import '../utils/format.dart';
-import 'transaction_page.dart';
-import 'accounts_page.dart';
-import 'statistics_page.dart';
+import 'transaction_edit_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -23,15 +21,6 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('当前账本：$ledgerName'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.pie_chart),
-            tooltip: '统计',
-            onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const StatisticsPage())),
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => p.init(),
@@ -80,19 +69,9 @@ class HomePage extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             ListTile(
-              leading: const Icon(Icons.account_balance_wallet),
-              title: const Text('资产管理'),
-              subtitle: const Text('添加 / 删除账户，调整余额'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AccountsPage())),
-            ),
-            const Divider(),
-            ListTile(
               leading: const Icon(Icons.receipt_long),
               title: const Text('账单明细'),
-              subtitle: const Text('查看当前账本全部记录'),
+              subtitle: const Text('查看 / 编辑当前账本全部记录'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showRecords(context, p),
             ),
@@ -141,6 +120,14 @@ class HomePage extends StatelessWidget {
                       color: isExp ? Colors.red : Colors.green,
                       fontWeight: FontWeight.bold),
                 ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => TransactionEditPage(txn: t)),
+                  );
+                },
               );
             },
           );

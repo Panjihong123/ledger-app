@@ -158,6 +158,9 @@ class DatabaseHelper {
   Future<int> insertTxn(Txn t) async =>
       (await db).insert('transactions', t.toMap());
 
+  Future<int> updateTxn(Txn t) async => (await db)
+      .update('transactions', t.toMap(), where: 'id=?', whereArgs: [t.id]);
+
   Future<int> deleteTxn(int id) async =>
       (await db).delete('transactions', where: 'id=?', whereArgs: [id]);
 }

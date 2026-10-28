@@ -136,6 +136,12 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateTransaction(Txn t) async {
+    await _db.updateTxn(t);
+    await _recalcAccountBalances();
+    notifyListeners();
+  }
+
   Future<List<Txn>> transactionsOfCurrentLedger() =>
       _db.getTransactions(currentLedgerId);
 

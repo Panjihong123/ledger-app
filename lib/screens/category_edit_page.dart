@@ -3,6 +3,15 @@ import 'package:provider/provider.dart';
 import '../models/category.dart';
 import '../providers/app_provider.dart';
 
+/// 可选图标（emoji 文本，不增加安装包体积）
+const List<String> _iconChoices = [
+  '🍚', '🍎', '🥪', '☕', '🍜', '🍔', '🍕', '🍱',
+  '💡', '🏠', '🅿️', '🚌', '🚇', '⛽', '🚕', '✈️',
+  '🛍️', '👕', '👟', '💄', '💊', '🎮', '📚', '🎁',
+  '💰', '🧧', '🧰', '💼', '📈', '🏥', '🐱', '🐶',
+  '📱', '💻', '🎬', '⚽', '🎵', '📦', '🔧', '🍷',
+];
+
 class CategoryEditPage extends StatelessWidget {
   final Category? category;
   final String type; // 新建时的默认类型
@@ -13,8 +22,8 @@ class CategoryEditPage extends StatelessWidget {
     final p = Provider.of<AppProvider>(context);
     final isEdit = category != null;
     final nameCtrl = TextEditingController(text: category?.name ?? '');
-    final iconCtrl = TextEditingController(text: category?.icon ?? '📦');
     String t = category?.type ?? type;
+    String icon = category?.icon ?? '📦';
     int color = category?.color ?? 0xFF42A5F5;
 
     return Scaffold(
@@ -37,10 +46,31 @@ class CategoryEditPage extends StatelessWidget {
               decoration: const InputDecoration(labelText: '分类名称'),
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: iconCtrl,
-              decoration: const InputDecoration(
-                  labelText: '图标（emoji）', hintText: '例如 🍚 🚌 💡'),
+            const Text('图标'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _iconChoices
+                  .map((e) => GestureDetector(
+                        onTap: () => setState(() => icon = e),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: icon == e
+                                ? Colors.blue.shade100
+                                : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: icon == e
+                                ? Border.all(color: Colors.blue, width: 2)
+                                : null,
+                          ),
+                          child: Text(e, style: const TextStyle(fontSize: 22)),
+                        ),
+                      ))
+                  .toList(),
             ),
             const SizedBox(height: 16),
             const Text('颜色'),
@@ -79,9 +109,7 @@ class CategoryEditPage extends StatelessWidget {
                   name: name,
                   type: t,
                   color: color,
-                  icon: iconCtrl.text.trim().isEmpty
-                      ? '📦'
-                      : iconCtrl.text.trim(),
+                  icon: icon,
                 );
                 if (isEdit) {
                   p.updateCategory(c);
