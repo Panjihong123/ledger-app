@@ -61,10 +61,9 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
     final theme = Theme.of(context);
     final maxHeight = MediaQuery.of(context).size.height * 0.75;
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxHeight),
+    return SizedBox(
+      height: maxHeight,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 12, 8),
@@ -84,7 +83,7 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
             ),
           ),
           const Divider(height: 1),
-          Flexible(
+          Expanded(
             child: _tops.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(40),
