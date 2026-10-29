@@ -62,9 +62,42 @@ class AppProvider extends ChangeNotifier {
             .id!;
     accounts = await _db.getAccounts();
     categories = await _db.getCategories();
+    await _loadStatPrefs(); // 恢复上次统计页的选择
     await _recalcAccountBalances();
     _ready = true;
     notifyListeners();
+  }
+
+  /* ---------------- 统计页偏好（写库，退出 App 后依然记得） ---------------- */
+  String statRange = 'month'; // day / month / year
+  String statType = 'expense'; // expense / income
+  bool statByTop = true; // true=按一级分类，false=按二级分类
+
+  Future<void> _loadStatPrefs() async {
+    final r = await _db.getSetting('stat_range');
+    final t = await _db.getSetting('stat_type');
+    final b = await _db.getSetting('stat_by_top');
+    if (r == 'day' || r == 'month' || r == 'year') statRange = r!;
+    if (t == 'expense' || t == 'income') statType = t!;
+    if (b != null) statByTop = b == '1';
+  }
+
+  Future<void> setStatRange(String v) async {
+    statRange = v;
+    notifyListeners();
+    await _db.setSetting('stat_range', v);
+  }
+
+  Future<void> setStatType(String v) async {
+    statType = v;
+    notifyListeners();
+    await _db.setSetting('stat_type', v);
+  }
+
+  Future<void> setStatByTop(bool v) async {
+    statByTop = v;
+    notifyListeners();
+    await _db.setSetting('stat_by_top', v ? '1' : '0');
   }
 
   Future<void> _recalcAccountBalances() async {

@@ -17,8 +17,12 @@ class DatabaseHelper {
     final dir = await getDatabasesPath();
     final path = join(dir, 'ledger.db');
     return openDatabase(path,
-        version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
+        version: 3, onCreate: _onCreate, onUpgrade: _onUpgrade);
   }
+
+  /// 通用配置表：保存用户偏好（如统计页的选择），退出 App 后仍然保留
+  static const String _settingsTable =
+      'CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)';
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute(
@@ -29,6 +33,7 @@ class DatabaseHelper {
         'CREATE TABLE categories(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, color INTEGER, icon TEXT, parentId INTEGER)');
     await db.execute(
         'CREATE TABLE transactions(id INTEGER PRIMARY KEY AUTOINCREMENT, ledgerId INTEGER, accountId INTEGER, categoryId INTEGER, type TEXT, amount REAL, date INTEGER, note TEXT)');
+    await db.execute(_settingsTable);
 
     await db.insert('ledgers', {'name': '默认账本', 'isDefault': 1});
     await _seedCategories(db);
@@ -42,6 +47,10 @@ class DatabaseHelper {
       // 用新的人群完整分类树替换旧的扁平默认分类
       await db.delete('categories');
       await _seedCategories(db);
+    }
+    if (oldVersion < 3) {
+      // v1.2.0 新增：偏好设置表（不影响已有账目数据）
+      await db.execute(_settingsTable);
     }
   }
 
@@ -234,4 +243,21 @@ class DatabaseHelper {
 
   Future<int> deleteTxn(int id) async =>
       (await db).delete('transactions', where: 'id=?', whereArgs: [id]);
+
+  /* ---------------- 偏好设置 ---------------- */
+  /// 读取一个偏好值，没有则返回 null
+  Future<String?> getSetting(String key) async {
+    final d = await db;
+    final r = await d.query('settings',
+        columns: ['value'], where: 'key=?', whereArgs: [key], limit: 1);
+    if (r.isEmpty) return null;
+    return r.first['value'] as String?;
+  }
+
+  /// 写入/覆盖一个偏好值
+  Future<void> setSetting(String key, String value) async {
+    final d = await db;
+    await d.insert('settings', {'key': key, 'value': value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
 }

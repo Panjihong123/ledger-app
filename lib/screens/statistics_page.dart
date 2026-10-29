@@ -13,9 +13,8 @@ class StatisticsPage extends StatefulWidget {
 }
 
 class _StatisticsPageState extends State<StatisticsPage> {
-  String _range = 'month'; // month / year
-  String _type = 'expense'; // expense / income
-  bool _byTop = true; // true=按一级分类；false=按二级分类
+  // 按日统计选中的那一天（默认今天）
+  DateTime _day = DateTime.now();
   int _year = DateTime.now().year;
   int _month = DateTime.now().month;
 
@@ -38,6 +37,15 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
+  /// 切换按日统计的日期（同时同步年/月，切到按月时衔接自然）
+  void _changeDay(DateTime d) {
+    setState(() {
+      _day = d;
+      _year = d.year;
+      _month = d.month;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Provider.of<AppProvider>(context);
@@ -45,23 +53,41 @@ class _StatisticsPageState extends State<StatisticsPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final from = _range == 'month'
-        ? DateTime(_year, _month, 1).millisecondsSinceEpoch
-        : DateTime(_year, 1, 1).millisecondsSinceEpoch;
-    final to = _range == 'month'
-        ? DateTime(_year, _month + 1, 1)
-            .subtract(const Duration(milliseconds: 1))
-            .millisecondsSinceEpoch
-        : DateTime(_year + 1, 1, 1)
-            .subtract(const Duration(milliseconds: 1))
-            .millisecondsSinceEpoch;
+    // 统计偏好存在 provider（写库），这里直接读，切换时回写
+    final range = p.statRange; // day / month / year
+    final type = p.statType; // expense / income
+    final byTop = p.statByTop;
 
-    final title = _range == 'month' ? '$_year 年 $_month 月' : '$_year 年';
+    // 时间区间
+    final int from;
+    final int to;
+    final String title;
+    if (range == 'day') {
+      final start = DateTime(_day.year, _day.month, _day.day);
+      from = start.millisecondsSinceEpoch;
+      to = start
+          .add(const Duration(days: 1))
+          .subtract(const Duration(milliseconds: 1))
+          .millisecondsSinceEpoch;
+      title = '${_day.year} 年 ${_day.month} 月 ${_day.day} 日';
+    } else if (range == 'month') {
+      from = DateTime(_year, _month, 1).millisecondsSinceEpoch;
+      to = DateTime(_year, _month + 1, 1)
+          .subtract(const Duration(milliseconds: 1))
+          .millisecondsSinceEpoch;
+      title = '$_year 年 $_month 月';
+    } else {
+      from = DateTime(_year, 1, 1).millisecondsSinceEpoch;
+      to = DateTime(_year + 1, 1, 1)
+          .subtract(const Duration(milliseconds: 1))
+          .millisecondsSinceEpoch;
+      title = '$_year 年';
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('统计')),
       body: FutureBuilder<List<CategoryStat>>(
-        future: p.statsByCategory(_type, from, to, byTop: _byTop),
+        future: p.statsByCategory(type, from, to, byTop: byTop),
         builder: (ctx, snap) {
           final stats = snap.data ?? [];
           final total = stats.fold(0.0, (s, e) => s + e.sum);
@@ -69,14 +95,15 @@ class _StatisticsPageState extends State<StatisticsPage> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // 范围切换
+              // 统计粒度：按日 / 按月 / 按年
               SegmentedButton<String>(
                 segments: const [
+                  ButtonSegment(value: 'day', label: Text('按日')),
                   ButtonSegment(value: 'month', label: Text('按月')),
                   ButtonSegment(value: 'year', label: Text('按年')),
                 ],
-                selected: {_range},
-                onSelectionChanged: (s) => setState(() => _range = s.first),
+                selected: {range},
+                onSelectionChanged: (s) => p.setStatRange(s.first),
               ),
               const SizedBox(height: 12),
               // 收/支切换
@@ -85,8 +112,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   ButtonSegment(value: 'expense', label: Text('支出')),
                   ButtonSegment(value: 'income', label: Text('收入')),
                 ],
-                selected: {_type},
-                onSelectionChanged: (s) => setState(() => _type = s.first),
+                selected: {type},
+                onSelectionChanged: (s) => p.setStatType(s.first),
               ),
               const SizedBox(height: 12),
               // 一级/二级维度切换
@@ -95,41 +122,83 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   ButtonSegment(value: true, label: Text('按一级')),
                   ButtonSegment(value: false, label: Text('按二级')),
                 ],
-                selected: {_byTop},
-                onSelectionChanged: (s) => setState(() => _byTop = s.first),
+                selected: {byTop},
+                onSelectionChanged: (s) => p.setStatByTop(s.first),
               ),
               const SizedBox(height: 12),
-              // 年/月选择
-              Row(
-                children: [
-                  DropdownButton<int>(
-                    value: _year,
-                    items: List.generate(11, (i) => DateTime.now().year - 5 + i)
-                        .map((y) => DropdownMenuItem(value: y, child: Text('$y 年')))
-                        .toList(),
-                    onChanged: (v) => setState(() => _year = v!),
-                  ),
-                  if (_range == 'month') ...[
-                    const SizedBox(width: 16),
-                    DropdownButton<int>(
-                      value: _month,
-                      items: List.generate(12, (i) => i + 1)
-                          .map((m) =>
-                              DropdownMenuItem(value: m, child: Text('$m 月')))
-                          .toList(),
-                      onChanged: (v) => setState(() => _month = v!),
+              // 时间选择：按日 → 日期（可前后翻页）；按月/按年 → 年（月）下拉
+              if (range == 'day')
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left),
+                      tooltip: '前一天',
+                      onPressed: () => _changeDay(
+                          _day.subtract(const Duration(days: 1))),
+                    ),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        label: Text(ymd(_day.millisecondsSinceEpoch)),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _day,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) {
+                            _changeDay(picked);
+                          }
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right),
+                      tooltip: '后一天',
+                      onPressed: () =>
+                          _changeDay(_day.add(const Duration(days: 1))),
                     ),
                   ],
-                ],
-              ),
+                )
+              else
+                Row(
+                  children: [
+                    DropdownButton<int>(
+                      value: _year,
+                      items: List.generate(
+                              11, (i) => DateTime.now().year - 5 + i)
+                          .map((y) =>
+                              DropdownMenuItem(value: y, child: Text('$y 年')))
+                          .toList(),
+                      onChanged: (v) => setState(() => _year = v!),
+                    ),
+                    if (range == 'month') ...[
+                      const SizedBox(width: 16),
+                      DropdownButton<int>(
+                        value: _month,
+                        items: List.generate(12, (i) => i + 1)
+                            .map((m) =>
+                                DropdownMenuItem(value: m, child: Text('$m 月')))
+                            .toList(),
+                        onChanged: (v) => setState(() => _month = v!),
+                      ),
+                    ],
+                  ],
+                ),
               const SizedBox(height: 16),
-              Text('$title ${_type == 'expense' ? '支出' : '收入'}合计：${money(total)}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(
+                  '$title ${type == 'expense' ? '支出' : '收入'}合计：${money(total)}',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               if (stats.isEmpty)
-                const SizedBox(
+                SizedBox(
                     height: 200,
-                    child: Center(child: Text('该区间暂无记录')))
+                    child: Center(
+                        child: Text(range == 'day'
+                            ? '这一天还没有记录'
+                            : '该区间暂无记录')))
               else ...[
                 // 饼图：控制尺寸，避免占满整屏
                 SizedBox(
