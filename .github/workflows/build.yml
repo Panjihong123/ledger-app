@@ -19,15 +19,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # 关键：用仓库里固定的证书替换 CI 临时生成的 debug 证书。
-      # 这样每一次构建的签名都一致，新版本才能直接覆盖安装旧版本（不会丢数据）。
-      - name: 安装固定签名证书
-        run: |
-          mkdir -p "$HOME/.android"
-          cp signing/ledger.jks "$HOME/.android/debug.keystore"
-          echo "=== 本次构建使用的签名指纹（每次都相同才算正常） ==="
-          keytool -list -keystore "$HOME/.android/debug.keystore" -storepass android 2>/dev/null | grep -i "SHA-256\|SHA256" || true
-
       - name: 用官方模板生成 Android 原生工程
         run: |
           flutter create --org com.pan.ledger --project-name ledger /tmp/ledgerapp
@@ -42,16 +33,41 @@ jobs:
         run: |
           sed -i 's/android:label="ledger"/android:label="记账软件"/' /tmp/ledgerapp/android/app/src/main/AndroidManifest.xml
 
+      # 关键：不再依赖 AGP 的默认 debug 证书路径（那条路会被 AGP 忽略并重新生成随机证书），
+      # 而是把仓库里的固定 keystore 复制进工程，并显式写入 signingConfigs.release。
+      - name: 配置固定签名（保证每次签名一致，可覆盖安装）
+        run: |
+          cp signing/ledger.jks /tmp/ledgerapp/android/app/ledger.jks
+          python3 tools/ci_patch_signing.py /tmp/ledgerapp/android/app /tmp/ledgerapp/android/app/ledger.jks
+          echo "=== 仓库 keystore 指纹（期望签名）==="
+          keytool -list -v -keystore /tmp/ledgerapp/android/app/ledger.jks -storepass android 2>/dev/null | grep -i "SHA256:" || true
+
       - name: 拉取依赖并构建 APK
         working-directory: /tmp/ledgerapp
         run: |
           flutter pub get
-          # 版本名从 pubspec.yaml 读（如 1.1.0）；版本号用 CI 运行序号，保证每次递增
+          # 版本名从 pubspec.yaml 读（如 1.2.0）；版本号用 CI 运行序号，保证每次递增
           VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | sed 's/+.*//')
           echo "构建版本：$VERSION_NAME  版本号：${{ github.run_number }}"
           flutter build apk --release \
             --build-name="$VERSION_NAME" \
             --build-number=${{ github.run_number }}
+
+      # 兜底校验：直接读 APK 里的证书指纹，和期望值不一致就让构建失败，
+      # 避免又产出一个"装不上"的包。
+      - name: 校验 APK 真实签名
+        working-directory: /tmp/ledgerapp
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          ACTUAL=$(keytool -printcert -jarfile "$APK" 2>/dev/null | grep -i "SHA256:" | head -1 | sed 's/.*SHA256:[[:space:]]*//' | tr -d ' \r')
+          EXPECTED=$(keytool -list -v -keystore android/app/ledger.jks -storepass android 2>/dev/null | grep -i "SHA256:" | head -1 | sed 's/.*SHA256:[[:space:]]*//' | tr -d ' \r')
+          echo "APK 实际签名指纹：$ACTUAL"
+          echo "期望签名指纹    ：$EXPECTED"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::APK 签名与仓库固定证书不一致，本次构建产物不可覆盖安装"
+            exit 1
+          fi
+          echo "✅ 签名校验通过，可用于覆盖安装"
 
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
