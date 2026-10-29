@@ -18,6 +18,7 @@ CI 专用：给 flutter create 生成的 Android 工程打上【固定 release �
 """
 
 import pathlib
+import re
 import sys
 
 STORE_PASS = "android"
@@ -70,10 +71,15 @@ def patch_groovy(path: pathlib.Path, keystore: str) -> None:
         print("[OK] 在 android 块顶部插入 signingConfigs.release")
 
     # release 构建改用我们的签名
-    if "signingConfig signingConfigs.debug" not in src:
-        fail("build.gradle 中找不到 `signingConfig signingConfigs.debug`，无法切换为 release 签名")
-    src = src.replace("signingConfig signingConfigs.debug",
-                      "signingConfig signingConfigs.release")
+    # 兼容两种写法：`signingConfig signingConfigs.debug` 与 `signingConfig = signingConfigs.debug`
+    pattern = re.compile(r"signingConfig\s*=?\s*signingConfigs\.debug\b")
+    if not pattern.search(src):
+        print("[DEBUG] 未能匹配签名赋值，模板中相关行如下：")
+        for line in src.splitlines():
+            if "signingConfig" in line:
+                print("  > " + line.strip())
+        fail("build.gradle 中找不到 debug 签名引用，无法切换为 release 签名")
+    src = pattern.sub("signingConfig = signingConfigs.release", src)
 
     path.write_text(src, encoding="utf-8")
     print("[OK] buildTypes.release → signingConfigs.release")
@@ -103,10 +109,14 @@ def patch_kts(path: pathlib.Path, keystore: str) -> None:
     insert_at = idx + len(anchor)
     src = src[:insert_at] + "\n" + release_cfg + src[insert_at:]
 
-    if 'signingConfig = signingConfigs.getByName("debug")' not in src:
+    pattern = re.compile(r'signingConfig\s*=?\s*signingConfigs\.getByName\("debug"\)')
+    if not pattern.search(src):
+        print("[DEBUG] 未能匹配签名赋值，模板中相关行如下：")
+        for line in src.splitlines():
+            if "signingConfig" in line:
+                print("  > " + line.strip())
         fail("build.gradle.kts 中找不到 debug 签名引用，无法切换为 release")
-    src = src.replace('signingConfig = signingConfigs.getByName("debug")',
-                      'signingConfig = signingConfigs.getByName("release")')
+    src = pattern.sub('signingConfig = signingConfigs.getByName("release")', src)
 
     path.write_text(src, encoding="utf-8")
     print("[OK] build.gradle.kts → signingConfigs.release")
